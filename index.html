@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SP College – Admin Panel</title>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBVdlos2VKAtwZouvV6uojUqwQ_v-Ex86s",
+    authDomain:        "college-cc810.firebaseapp.com",
+    projectId:         "college-cc810",
+    storageBucket:     "college-cc810.firebasestorage.app",
+    messagingSenderId: "661443046107",
+    appId:             "1:661443046107:web:93ac19af8f5750fba5fafe"
+  };
+
+  let db;
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    showMsg("✅ Firebase connected!", "green");
+  } catch(e) {
+    showMsg("❌ Firebase init failed: " + e.message, "red");
+  }
+
+  function showMsg(text, color) {
+    const el = document.getElementById('saveMsg');
+    if (!el) return;
+    el.style.color   = color;
+    el.textContent   = text;
+    el.style.display = 'block';
+  }
+
+  window.saveStudent = async function() {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled    = true;
+    btn.textContent = "Saving...";
+    showMsg("⏳ Connecting to Firebase...", "#555");
+
+    const subjects = [];
+    const marks    = [];
+    document.querySelectorAll('.subject-row').forEach(row => {
+      const sub  = row.querySelector('.sub-name').value.trim();
+      const mark = parseInt(row.querySelector('.sub-mark').value.trim());
+      if (sub) { subjects.push(sub); marks.push(isNaN(mark) ? 0 : mark); }
+    });
+
+    const total = marks.reduce((a, b) => a + b, 0);
+    const outOf = parseInt(document.getElementById('outOf').value) || 0;
+
+    const data = {
+      rollno:  document.getElementById('rollno').value.trim(),
+      dob:     document.getElementById('dob').value.trim(),
+      admno:   document.getElementById('admno').value.trim(),
+      div:     document.getElementById('div').value.trim().toUpperCase(),
+      name:    document.getElementById('name').value.trim().toUpperCase(),
+      class:   document.getElementById('classField').value.trim(),
+      exam:    document.getElementById('exam').value.trim(),
+      date:    document.getElementById('date').value.trim(),
+      subjects, marks, total, outOf
+    };
+
+    if (!data.rollno || !data.dob || !data.name) {
+      showMsg("❌ Roll No, DOB and Name are required.", "red");
+      btn.disabled = false; btn.textContent = "💾 Save to Firebase";
+      return;
+    }
+
+    if (!db) {
+      showMsg("❌ Firebase not initialized.", "red");
+      btn.disabled = false; btn.textContent = "💾 Save to Firebase";
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      showMsg("❌ Timeout! Firebase Rules publish karo:\nFirestore → Rules → allow read, write: if true; → Publish", "red");
+      btn.disabled = false; btn.textContent = "💾 Save to Firebase";
+    }, 10000);
+
+    try {
+      showMsg("⏳ Saving...", "#555");
+      const q    = query(collection(db, "students"), where("rollno", "==", data.rollno));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) await deleteDoc(doc(db, "students", d.id));
+
+      await addDoc(collection(db, "students"), data);
+      clearTimeout(timeout);
+      showMsg("✅ Saved! Student can login with\nRoll No: " + data.rollno + "  |  DOB: " + data.dob, "green");
+    } catch(e) {
+      clearTimeout(timeout);
+      const msg = e.code === "permission-denied"
+        ? "❌ Permission denied!\nFirestore → Rules → paste:\nallow read, write: if true;\nthen Publish."
+        : "❌ Error: " + e.message;
+      showMsg(msg, "red");
+    }
+
+    btn.disabled = false;
+    btn.textContent = "💾 Save to Firebase";
+  };
+
+  window.addSubjectRow = function(name = "", mark = "") {
+    const container = document.getElementById('subjectRows');
+    const row = document.createElement('div');
+    row.className = 'subject-row';
+    row.innerHTML = `
+      <input class="sub-name" type="text" placeholder="Subject name" value="${name}"
+        style="flex:1; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px;" />
+      <input class="sub-mark" type="number" placeholder="Marks" value="${mark}"
+        style="width:80px; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:13px; margin-left:8px;" />
+      <button onclick="this.parentElement.remove()"
+        style="margin-left:8px; padding:7px 12px; background:#e55; color:#fff; border:none; border-radius:6px; cursor:pointer;">✕</button>
+    `;
+    container.appendChild(row);
+  };
+</script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 24px 16px; }
+
+  .page-title { text-align: center; font-size: 20px; font-weight: bold; color: #0a1f5c; margin-bottom: 20px; }
+  .page-title span { font-size: 13px; font-weight: normal; color: #555; display: block; margin-top: 4px; }
+
+  .card {
+    background: #fff; border-radius: 10px; max-width: 640px;
+    margin: 0 auto; padding: 24px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+  }
+
+  .section-title {
+    font-size: 12px; font-weight: bold; color: #17a2b8;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 12px; margin-top: 20px;
+    border-bottom: 1px solid #eee; padding-bottom: 6px;
+  }
+
+  .field { margin-bottom: 12px; }
+  label { display: block; font-size: 12px; font-weight: bold; color: #444; margin-bottom: 4px; }
+  input[type="text"], input[type="number"] {
+    width: 100%; padding: 9px 10px; border: 1px solid #ccc;
+    border-radius: 6px; font-size: 14px; outline: none; font-family: Arial, sans-serif;
+  }
+  input:focus { border-color: #17a2b8; box-shadow: 0 0 0 2px rgba(23,162,184,0.15); }
+
+  .row2 { display: flex; gap: 12px; }
+  .row2 .field { flex: 1; }
+
+  .subject-row { display: flex; align-items: center; margin-bottom: 8px; }
+
+  #addSubBtn {
+    padding: 8px 16px; background: #17a2b8; color: #fff;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;
+  }
+
+  .outof-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; }
+  .outof-row label { margin: 0; white-space: nowrap; }
+  .outof-row input { width: 90px; }
+
+  #saveBtn {
+    width: 100%; padding: 13px; background: #0a1f5c;
+    color: #fff; border: none; border-radius: 8px;
+    font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 22px;
+  }
+  #saveBtn:hover { background: #1340a8; }
+  #saveBtn:disabled { background: #999; cursor: not-allowed; }
+
+  #saveMsg {
+    display: none; margin-top: 14px; font-size: 13px; font-weight: bold;
+    padding: 10px 14px; border-radius: 6px;
+    background: #f9f9f9; border: 1px solid #eee;
+    white-space: pre-line; line-height: 1.6;
+  }
+
+  .note {
+    background: #fff8e1; border-left: 3px solid #f0c843;
+    border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #555; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  🔒 Admin Panel
+  <span>SP College – FYJC Result Entry</span>
+</div>
+
+<div class="card">
+
+  <div class="note">
+    📌 Fill student details and click <b>Save to Firebase</b>.<br>
+    Student views result using <b>Roll No + DOB</b> on result portal.
+  </div>
+
+  <div id="saveMsg"></div>
+
+  <div class="section-title">Student Info</div>
+
+  <div class="row2">
+    <div class="field"><label>Roll No *</label><input type="text" id="rollno" placeholder="e.g. 1764" /></div>
+    <div class="field"><label>Admission No</label><input type="text" id="admno" placeholder="e.g. 1764" /></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>DOB * (YYYYMMDD)</label><input type="text" id="dob" placeholder="e.g. 20090125" maxlength="8" /></div>
+    <div class="field"><label>Division</label><input type="text" id="div" placeholder="e.g. F" maxlength="2" /></div>
+  </div>
+  <div class="field"><label>Student Full Name *</label><input type="text" id="name" placeholder="e.g. GOND PRAJYOT DATTATRAY" /></div>
+
+  <div class="section-title">Exam Info</div>
+  <div class="row2">
+    <div class="field"><label>Class</label><input type="text" id="classField" value="FYJC (Science)" /></div>
+    <div class="field"><label>Exam</label><input type="text" id="exam" value="October 2025" /></div>
+  </div>
+  <div class="field"><label>Date on Marksheet</label><input type="text" id="date" value="30-12-2025" /></div>
+
+  <div class="section-title">Subjects &amp; Marks</div>
+  <div id="subjectRows"></div>
+  <button id="addSubBtn" onclick="addSubjectRow()">+ Add Subject</button>
+
+  <div class="outof-row">
+    <label>Total Out Of:</label>
+    <input type="number" id="outOf" value="400" />
+    <span style="font-size:12px; color:#888;">(Total auto-calculated)</span>
+  </div>
+
+  <button id="saveBtn" onclick="saveStudent()">💾 Save to Firebase</button>
+
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    ["English","Physics","Chemistry","Mathematics & Statistics",
+     "Scooter and motorcycle servicing I","Scooter and motorcycle servicing II"]
+    .forEach(s => addSubjectRow(s, ""));
+  });
+</script>
+</body>
+</html>
